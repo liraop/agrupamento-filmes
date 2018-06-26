@@ -1,0 +1,111 @@
+---
+title: "Prob3cp1"
+output: html_document
+---
+
+
+```{r setup, include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_code, message=FALSE, warning=FALSE,echo=FALSE}
+library(tidyverse, warn.conflicts = F)
+library(rvest)
+library(plotly)
+library(cluster)
+#library(ggdendro)
+library(gridExtra)
+theme_set(theme_bw())
+source(here::here("code/lib.R"))
+source(here::here("code/plota_solucoes_hclust.R"))
+
+
+```
+
+# Agrupamento com filmes de Jim Carrey
+
+Usaremos dados do [Rotten Tomatoes](https://www.rottentomatoes.com) sobre os filmes de Jim Carrey 
+
+O tipo de pergunta que queremos responder com agrupamento é _existem tipos de filmes claramente diferentes em termos de sucesso na crítica e público dentre os feitos por Jim Carrey?_
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+from_page <- read_html("https://www.rottentomatoes.com/celebrity/jim_carrey/") %>% 
+    html_node("#filmographyTbl") %>% # A sintaxe da expressão é de um seletor à lá JQuery: https://rdrr.io/cran/rvest/man/html_nodes.html 
+    html_table(fill=TRUE) %>% # Faz parse
+    as.tibble()
+
+filmes = from_page %>% 
+    filter(RATING != "No Score Yet", 
+           `BOX OFFICE` != "—", 
+           CREDIT != "Executive Producer") %>%
+    mutate(RATING = as.numeric(gsub("%", "", RATING)), 
+           `BOX OFFICE` = as.numeric(gsub("[$|M]", "", `BOX OFFICE`)))
+
+import_data("jim_carrey")
+filmes = read_imported_data()
+```
+
+```{r echo=FALSE}
+filmes
+```
+
+São 14 filmes com avaliações bem variadas. Os filmes em que Jim Carrey participa variam de humor para drama. Provavelmente essa mudança deve ser refletida nas bilheterias.
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+agrupamento_h <- filmes %>% 
+    mutate(bilheteria =  log10(bilheteria))%>%
+    mutate_at(vars(avaliacao, bilheteria), funs(scale)) %>%
+    as.data.frame()%>% 
+    column_to_rownames("filme") %>% 
+    select(avaliacao, bilheteria) %>%
+    dist(method = "manhattan") %>% 
+    hclust(method = "complete")
+```
+
+Fazendo agrupamentos com os filmes por suas diferenças de avaliação e bilheteria, vemos que é interessante gerar algumas visualizações para que possa ficar mais visível a similaridade. 
+
+```{r ,message=FALSE, warning=FALSE,echo=FALSE}
+get_grupos <- function(agrupamento, num_grupos){
+    agrupamento %>% 
+        cutree(num_grupos) %>% 
+        as.data.frame() %>% 
+        mutate(label = rownames(.)) %>% 
+        gather(key =  "k", value = "grupo", -label) %>% 
+        mutate(grupo = as.character(grupo))
+}
+
+atribuicoes = get_grupos(agrupamento_h, num_grupos = 1:6)
+
+atribuicoes = atribuicoes %>% 
+    left_join(filmes, by = c("label" = "filme"))   
+
+atribuicoes %>% 
+    ggplot(aes(x = "Filmes", y = avaliacao, colour = grupo)) + 
+    geom_jitter(width = .02, height = 0, size = 1.6, alpha = .6) + 
+    facet_wrap(~ paste(k, " grupos")) + 
+    scale_color_brewer(palette = "Dark2")
+
+```
+
+De modo geral, a divisão em 5 grupos deixa os dados de forma mais amigável para uma análise:
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+k_escolhido = 5
+
+x <-atribuicoes %>% 
+    filter(k == k_escolhido) %>% 
+    ggplot(aes(x = bilheteria, y = avaliacao, colour = grupo, text =
+                   paste("Filme:", label))) + 
+    geom_jitter(width = .02, height = 0, size = 3, alpha = .6) + 
+    scale_color_brewer(palette = "Dark2") + 
+    labs(x = "Bilheteria", y = "Avaliação" ) +
+    coord_flip()
+    
+ggplotly(x)
+```
+
+- Grupo 1: Vemos os filme que não foram sucesso de crítica nem muito menos de bilheteria. Poderiamos chamá-los de 'Show de Horror'
+- Grupo 2: Filme estilo sessão da tarde. Não é um sucesso absoluto mas também não são ruins. 
+- Grupo 3: Todo ator tem aquele filme cult que é até legal mas não vende nada, não é mesmo? 
+- Grupo 4: Estes são o que salvam o dia. São os filmes razoavelmente bem avaliados mas que possuem as maiores bilheterias. Tem uma maior proporção na carreira do Jim Carrey.
+- Grupo 5: Apesar de excelentes em crítica, os dois filmes restantes não foram sucesso de público. Curioso que `Eternal Sunshine of The Spotless Mind` é um filme bastante visto atualmente. 

@@ -31,7 +31,7 @@ theme_report <- function(base_size = 11,
     ret
 }
 
-import_data <- function(celebridade = "tom_cruise"){
+import_data <- function(celebridade = "jim_carrey"){
     #' Usa o nome como aparece na url do rottentomatoes.com 
     #' Ex: Tom Cruise tem a url https://www.rottentomatoes.com/celebrity/tom_cruise/ 
     #' O argumento deve ser tom_cruise

@@ -11,10 +11,10 @@ library(tidyverse)
 library(here)
 library(cluster)
 library(plotly)
-library(ggdendro)
+#library(ggdendro)
 
 source(here::here("code/lib.R"))
-theme_set(theme_report())
+theme_set(theme_bw())
 
 knitr::opts_chunk$set(tidy = FALSE,
                       fig.width = 6,
